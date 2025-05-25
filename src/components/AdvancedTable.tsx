@@ -3,6 +3,8 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { Search, Upload, Plus, Trash2, Edit3, Palette, Download, Settings } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { cn } from '@/lib/utils';
+import { useTableData } from '@/hooks/useTableData';
+import { Toaster } from '@/components/ui/toaster';
 
 type CellValue = string | number;
 type TableData = CellValue[][];
@@ -79,20 +81,16 @@ const themes: Theme[] = [
 ];
 
 const AdvancedTable: React.FC = () => {
-  const [data, setData] = useState<TableData>([
-    ['שם', 'תפקיד', 'מחלקה', 'סטטוס', 'עדיפות'],
-    ['אחמד כהן', 'מפתח', 'טכנולוגיה', 'פעיל', 'גבוהה'],
-    ['שרה לוי', 'מעצבת', 'עיצוב', 'פעיל', 'בינונית'],
-    ['יוסף אבידן', 'מנהל', 'ניהול', 'בחופשה', 'נמוכה'],
-  ]);
-
-  const [columns, setColumns] = useState<Column[]>([
-    { id: '0', name: 'שם', width: 150, visible: true },
-    { id: '1', name: 'תפקיד', width: 120, visible: true },
-    { id: '2', name: 'מחלקה', width: 100, visible: true },
-    { id: '3', name: 'סטטוס', width: 100, visible: true },
-    { id: '4', name: 'עדיפות', width: 100, visible: true },
-  ]);
+  const { 
+    data, 
+    columns, 
+    isLoading, 
+    updateData, 
+    updateColumns, 
+    updateBoth,
+    setData,
+    setColumns 
+  } = useTableData();
 
   const [editingCell, setEditingCell] = useState<{row: number, col: number} | null>(null);
   const [editValue, setEditValue] = useState<string>('');
@@ -130,7 +128,6 @@ const AdvancedTable: React.FC = () => {
         if (file.name.endsWith('.txt')) {
           const text = e.target?.result as string;
           const rows = text.split('\n').map(row => row.split('\t'));
-          setData(rows);
           
           // Update columns
           const newColumns = rows[0]?.map((header, index) => ({
@@ -139,14 +136,13 @@ const AdvancedTable: React.FC = () => {
             width: 120,
             visible: true
           })) || [];
-          setColumns(newColumns);
+          
+          updateBoth(rows, newColumns);
         } else {
           const workbook = XLSX.read(e.target?.result, { type: 'binary' });
           const sheetName = workbook.SheetNames[0];
           const worksheet = workbook.Sheets[sheetName];
           const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as CellValue[][];
-          
-          setData(jsonData);
           
           // Update columns
           const headers = jsonData[0] || [];
@@ -156,7 +152,8 @@ const AdvancedTable: React.FC = () => {
             width: 120,
             visible: true
           }));
-          setColumns(newColumns);
+          
+          updateBoth(jsonData, newColumns);
         }
       } catch (error) {
         console.error('Error importing file:', error);
@@ -172,7 +169,7 @@ const AdvancedTable: React.FC = () => {
     
     // Reset input
     event.target.value = '';
-  }, []);
+  }, [updateBoth]);
 
   // Handle cell editing
   const startEditing = useCallback((row: number, col: number) => {
@@ -185,10 +182,10 @@ const AdvancedTable: React.FC = () => {
     
     const newData = [...data];
     newData[editingCell.row][editingCell.col] = editValue;
-    setData(newData);
+    updateData(newData);
     setEditingCell(null);
     setEditValue('');
-  }, [editingCell, editValue, data]);
+  }, [editingCell, editValue, data, updateData]);
 
   const cancelEdit = useCallback(() => {
     setEditingCell(null);
@@ -198,8 +195,9 @@ const AdvancedTable: React.FC = () => {
   // Add new row
   const addRow = useCallback(() => {
     const newRow = new Array(columns.length).fill('');
-    setData([...data, newRow]);
-  }, [data, columns.length]);
+    const newData = [...data, newRow];
+    updateData(newData);
+  }, [data, columns.length, updateData]);
 
   // Add new column
   const addColumn = useCallback(() => {
@@ -211,18 +209,18 @@ const AdvancedTable: React.FC = () => {
       visible: true
     };
     
-    setColumns([...columns, newColumn]);
-    
+    const newColumns = [...columns, newColumn];
     const newData = data.map(row => [...row, '']);
-    setData(newData);
-  }, [columns, data]);
+    
+    updateBoth(newData, newColumns);
+  }, [columns, data, updateBoth]);
 
   // Delete row
   const deleteRow = useCallback((rowIndex: number) => {
     if (rowIndex === 0) return; // Can't delete header
     const newData = data.filter((_, index) => index !== rowIndex);
-    setData(newData);
-  }, [data]);
+    updateData(newData);
+  }, [data, updateData]);
 
   // Handle column resize
   const handleMouseDown = useCallback((e: React.MouseEvent, colIndex: number) => {
@@ -237,15 +235,19 @@ const AdvancedTable: React.FC = () => {
     const diff = e.clientX - resizeStart.x;
     const newWidth = Math.max(60, resizeStart.width + diff);
     
-    setColumns(prev => prev.map((col, index) => 
+    const newColumns = columns.map((col, index) => 
       index === resizingColumn ? { ...col, width: newWidth } : col
-    ));
-  }, [resizingColumn, resizeStart]);
+    );
+    setColumns(newColumns);
+  }, [resizingColumn, resizeStart, columns, setColumns]);
 
   const handleMouseUp = useCallback(() => {
+    if (resizingColumn !== null) {
+      updateColumns(columns);
+    }
     setResizingColumn(null);
     setResizeStart(null);
-  }, []);
+  }, [resizingColumn, columns, updateColumns]);
 
   useEffect(() => {
     if (resizingColumn !== null) {
@@ -266,8 +268,18 @@ const AdvancedTable: React.FC = () => {
     XLSX.writeFile(workbook, 'table-data.xlsx');
   }, [data]);
 
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-xl">טוען נתונים...</div>
+      </div>
+    );
+  }
+
   return (
     <div className={cn("min-h-screen p-6", currentTheme.colors.background)} dir="rtl">
+      <Toaster />
+      
       {/* Header */}
       <div className="mb-6">
         <h1 className={cn("text-3xl font-bold mb-4", currentTheme.colors.text)}>
@@ -367,9 +379,10 @@ const AdvancedTable: React.FC = () => {
                     type="checkbox"
                     checked={column.visible}
                     onChange={(e) => {
-                      setColumns(prev => prev.map((col, i) => 
+                      const newColumns = columns.map((col, i) => 
                         i === index ? { ...col, visible: e.target.checked } : col
-                      ));
+                      );
+                      updateColumns(newColumns);
                     }}
                     className="rounded"
                   />
