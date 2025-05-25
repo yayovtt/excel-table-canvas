@@ -68,13 +68,17 @@ export const useTableData = () => {
 
   const saveTableData = async (newData: TableData, newColumns: Column[]) => {
     try {
+      // Convert to JSON-safe format
+      const dataJson = JSON.parse(JSON.stringify(newData));
+      const columnsJson = JSON.parse(JSON.stringify(newColumns));
+
       if (tableId) {
         // Update existing record
         const { error } = await supabase
           .from('table_data')
           .update({
-            data: newData,
-            columns: newColumns,
+            data: dataJson,
+            columns: columnsJson,
             updated_at: new Date().toISOString()
           })
           .eq('id', tableId);
@@ -93,8 +97,8 @@ export const useTableData = () => {
         const { data: insertedData, error } = await supabase
           .from('table_data')
           .insert({
-            data: newData,
-            columns: newColumns
+            data: dataJson,
+            columns: columnsJson
           })
           .select()
           .single();
