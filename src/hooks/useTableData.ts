@@ -31,12 +31,71 @@ export const useTableData = () => {
 
   const [isLoading, setIsLoading] = useState(true);
   const [tableId, setTableId] = useState<string | null>(null);
+  const [isConnected, setIsConnected] = useState(false);
   const { toast } = useToast();
 
   // Load data from Supabase on component mount
   useEffect(() => {
     loadTableData();
   }, []);
+
+  // Set up real-time subscription
+  useEffect(() => {
+    const channel = supabase
+      .channel('table-data-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'table_data'
+        },
+        (payload) => {
+          console.log('Real-time update received:', payload);
+          
+          if (payload.eventType === 'UPDATE' && payload.new) {
+            const newData = Array.isArray(payload.new.data) ? payload.new.data as TableData : data;
+            
+            let newColumns = columns;
+            if (Array.isArray(payload.new.columns)) {
+              newColumns = (payload.new.columns as any[])
+                .filter(col => col && typeof col === 'object' && col.id && col.name)
+                .map(col => ({
+                  id: String(col.id || ''),
+                  name: String(col.name || ''),
+                  width: Number(col.width) || 120,
+                  visible: Boolean(col.visible !== false)
+                }));
+            }
+            
+            setData(newData);
+            setColumns(newColumns);
+            setTableId(payload.new.id);
+            
+            toast({
+              title: "עדכון מרחוק",
+              description: "הטבלה עודכנה על ידי משתמש אחר",
+            });
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log('Real-time subscription status:', status);
+        setIsConnected(status === 'SUBSCRIBED');
+        
+        if (status === 'SUBSCRIBED') {
+          toast({
+            title: "התחברות בוצעה",
+            description: "מחובר לעדכונים בזמן אמת",
+          });
+        }
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+      setIsConnected(false);
+    };
+  }, [toast]);
 
   const loadTableData = async () => {
     try {
@@ -55,19 +114,17 @@ export const useTableData = () => {
           variant: "destructive",
         });
       } else if (tableData) {
-        // Safely convert data with proper type checking
         const loadedData = Array.isArray(tableData.data) ? tableData.data as TableData : data;
         
-        // Safely convert columns with null checks and proper type validation
         let loadedColumns = columns;
         if (Array.isArray(tableData.columns)) {
           loadedColumns = (tableData.columns as any[])
-            .filter(col => col && typeof col === 'object' && col.id && col.name) // Filter out null/invalid columns
+            .filter(col => col && typeof col === 'object' && col.id && col.name)
             .map(col => ({
               id: String(col.id || ''),
               name: String(col.name || ''),
               width: Number(col.width) || 120,
-              visible: Boolean(col.visible !== false) // Default to true if not specified
+              visible: Boolean(col.visible !== false)
             }));
         }
         
@@ -84,12 +141,10 @@ export const useTableData = () => {
 
   const saveTableData = async (newData: TableData, newColumns: Column[]) => {
     try {
-      // Convert to JSON-safe format with validation
       const dataJson = JSON.parse(JSON.stringify(newData));
-      const columnsJson = JSON.parse(JSON.stringify(newColumns.filter(col => col && col.id))); // Filter out any null columns
+      const columnsJson = JSON.parse(JSON.stringify(newColumns.filter(col => col && col.id)));
 
       if (tableId) {
-        // Update existing record
         const { error } = await supabase
           .from('table_data')
           .update({
@@ -109,7 +164,6 @@ export const useTableData = () => {
           return;
         }
       } else {
-        // Create new record
         const { data: insertedData, error } = await supabase
           .from('table_data')
           .insert({
@@ -134,7 +188,7 @@ export const useTableData = () => {
 
       toast({
         title: "נשמר בהצלחה",
-        description: "הנתונים נשמרו במסד הנתונים",
+        description: "הנתונים נשמרו ונשלחו לכל המשתמשים",
       });
     } catch (error) {
       console.error('Error saving table data:', error);
@@ -152,14 +206,12 @@ export const useTableData = () => {
   };
 
   const updateColumns = (newColumns: Column[]) => {
-    // Filter out any null columns before updating
     const validColumns = newColumns.filter(col => col && col.id);
     setColumns(validColumns);
     saveTableData(data, validColumns);
   };
 
   const updateBoth = (newData: TableData, newColumns: Column[]) => {
-    // Filter out any null columns before updating
     const validColumns = newColumns.filter(col => col && col.id);
     setData(newData);
     setColumns(validColumns);
@@ -168,8 +220,9 @@ export const useTableData = () => {
 
   return {
     data,
-    columns: columns.filter(col => col && col.id), // Always return filtered columns
+    columns: columns.filter(col => col && col.id),
     isLoading,
+    isConnected,
     updateData,
     updateColumns,
     updateBoth,
