@@ -55,8 +55,24 @@ export const useTableData = () => {
           variant: "destructive",
         });
       } else if (tableData) {
-        setData(tableData.data as TableData);
-        setColumns(tableData.columns as Column[]);
+        // Safely convert data with proper type checking
+        const loadedData = Array.isArray(tableData.data) ? tableData.data as TableData : data;
+        
+        // Safely convert columns with null checks and proper type validation
+        let loadedColumns = columns;
+        if (Array.isArray(tableData.columns)) {
+          loadedColumns = (tableData.columns as any[])
+            .filter(col => col && typeof col === 'object' && col.id && col.name) // Filter out null/invalid columns
+            .map(col => ({
+              id: String(col.id || ''),
+              name: String(col.name || ''),
+              width: Number(col.width) || 120,
+              visible: Boolean(col.visible !== false) // Default to true if not specified
+            }));
+        }
+        
+        setData(loadedData);
+        setColumns(loadedColumns);
         setTableId(tableData.id);
       }
     } catch (error) {
@@ -68,9 +84,9 @@ export const useTableData = () => {
 
   const saveTableData = async (newData: TableData, newColumns: Column[]) => {
     try {
-      // Convert to JSON-safe format
+      // Convert to JSON-safe format with validation
       const dataJson = JSON.parse(JSON.stringify(newData));
-      const columnsJson = JSON.parse(JSON.stringify(newColumns));
+      const columnsJson = JSON.parse(JSON.stringify(newColumns.filter(col => col && col.id))); // Filter out any null columns
 
       if (tableId) {
         // Update existing record
@@ -136,24 +152,28 @@ export const useTableData = () => {
   };
 
   const updateColumns = (newColumns: Column[]) => {
-    setColumns(newColumns);
-    saveTableData(data, newColumns);
+    // Filter out any null columns before updating
+    const validColumns = newColumns.filter(col => col && col.id);
+    setColumns(validColumns);
+    saveTableData(data, validColumns);
   };
 
   const updateBoth = (newData: TableData, newColumns: Column[]) => {
+    // Filter out any null columns before updating
+    const validColumns = newColumns.filter(col => col && col.id);
     setData(newData);
-    setColumns(newColumns);
-    saveTableData(newData, newColumns);
+    setColumns(validColumns);
+    saveTableData(newData, validColumns);
   };
 
   return {
     data,
-    columns,
+    columns: columns.filter(col => col && col.id), // Always return filtered columns
     isLoading,
     updateData,
     updateColumns,
     updateBoth,
     setData,
-    setColumns
+    setColumns: (newColumns: Column[]) => setColumns(newColumns.filter(col => col && col.id))
   };
 };
