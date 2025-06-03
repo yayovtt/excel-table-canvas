@@ -41,16 +41,13 @@ export const DataTable: React.FC<DataTableProps> = ({
   onDeleteRow,
   onColumnResize
 }) => {
-  // Filter out null columns and ensure we have valid columns
-  const visibleColumns = (columns || []).filter(col => col && col.visible);
-  
   return (
     <div className="relative border rounded-lg overflow-hidden shadow-lg">
       <div className="overflow-auto max-h-[70vh]">
         <table className={cn("w-full", currentTheme.colors.background)}>
           <thead className={cn("sticky top-0 z-10", currentTheme.colors.accent)}>
             <tr>
-              {visibleColumns.map((column, colIndex) => (
+              {columns.filter(col => col.visible).map((column, colIndex) => (
                 <th
                   key={column.id}
                   style={{ width: `${column.width}px`, minWidth: '60px' }}
@@ -103,7 +100,7 @@ export const DataTable: React.FC<DataTableProps> = ({
                   currentTheme.colors.hover
                 )}
               >
-                {visibleColumns.map((column, colIndex) => (
+                {columns.filter(col => col.visible).map((column, colIndex) => (
                   <td
                     key={`${rowIndex}-${colIndex}`}
                     style={{ width: `${column.width}px`, minWidth: '60px' }}

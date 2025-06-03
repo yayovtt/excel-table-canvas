@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import { cn } from '@/lib/utils';
@@ -7,7 +8,6 @@ import { ThemeSelector } from '@/components/ThemeSelector';
 import { ColumnSettings } from '@/components/ColumnSettings';
 import { TableControls } from '@/components/TableControls';
 import { DataTable } from '@/components/DataTable';
-import { ConnectionStatus } from '@/components/ConnectionStatus';
 import { Theme, themes } from '@/types/theme';
 
 type CellValue = string | number;
@@ -24,8 +24,7 @@ const AdvancedTable: React.FC = () => {
   const { 
     data, 
     columns, 
-    isLoading,
-    isConnected,
+    isLoading, 
     updateData, 
     updateColumns, 
     updateBoth,
@@ -220,12 +219,9 @@ const AdvancedTable: React.FC = () => {
       
       {/* Header */}
       <div className="mb-6">
-        <div className="flex items-center justify-between mb-4">
-          <h1 className={cn("text-3xl font-bold", currentTheme.colors.text)}>
-            מערכת טבלה מתקדמת
-          </h1>
-          <ConnectionStatus isConnected={isConnected} currentTheme={currentTheme} />
-        </div>
+        <h1 className={cn("text-3xl font-bold mb-4", currentTheme.colors.text)}>
+          מערכת טבלה מתקדמת
+        </h1>
         
         {/* File Input (hidden) */}
         <input

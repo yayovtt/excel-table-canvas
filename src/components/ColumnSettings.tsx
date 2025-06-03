@@ -21,20 +21,17 @@ export const ColumnSettings: React.FC<ColumnSettingsProps> = ({
   currentTheme,
   onColumnsUpdate
 }) => {
-  // Filter out null columns
-  const validColumns = (columns || []).filter(col => col && col.id);
-  
   return (
     <div className={cn("p-4 border rounded-lg mb-4", currentTheme.colors.border, currentTheme.colors.accent)}>
       <h3 className={cn("font-semibold mb-3", currentTheme.colors.text)}>הגדרות עמודות</h3>
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-        {validColumns.map((column, index) => (
+        {columns.map((column, index) => (
           <label key={column.id} className="flex items-center gap-2">
             <input
               type="checkbox"
               checked={column.visible}
               onChange={(e) => {
-                const newColumns = validColumns.map((col, i) => 
+                const newColumns = columns.map((col, i) => 
                   i === index ? { ...col, visible: e.target.checked } : col
                 );
                 onColumnsUpdate(newColumns);
